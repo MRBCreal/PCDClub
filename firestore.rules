@@ -1,0 +1,120 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper: Check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Helper: Check if user is the document owner
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Helper: Check if user has a specific role in a club
+    function hasClubRole(clubId, role) {
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/clubs/$(clubId)/members/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/clubs/$(clubId)/members/$(request.auth.uid)).data.role == role;
+    }
+
+    // Helper: Check if user is club admin or owner
+    function isClubAdmin(clubId) {
+      return hasClubRole(clubId, 'admin') || hasClubRole(clubId, 'owner');
+    }
+
+    // Helper: Check if user is a member of the club
+    function isClubMember(clubId) {
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/clubs/$(clubId)/members/$(request.auth.uid));
+    }
+
+    // Users collection
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId);
+      allow delete: if false;
+    }
+
+    // Clubs collection
+    match /clubs/{clubId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isClubAdmin(clubId);
+      allow delete: if hasClubRole(clubId, 'owner');
+
+      // Club members subcollection
+      match /members/{memberId} {
+        allow read: if isClubMember(clubId);
+        allow create: if isClubAdmin(clubId);
+        allow update: if isClubAdmin(clubId) || isOwner(memberId);
+        allow delete: if isClubAdmin(clubId);
+      }
+
+      // Club payments subcollection
+      match /payments/{paymentId} {
+        allow read: if isClubMember(clubId);
+        allow create: if isClubAdmin(clubId) || isOwner(resource.data.memberId);
+        allow update: if isClubAdmin(clubId);
+        allow delete: if false;
+      }
+
+      // Club invoices subcollection
+      match /invoices/{invoiceId} {
+        allow read: if isClubMember(clubId);
+        allow create: if isClubAdmin(clubId);
+        allow update: if isClubAdmin(clubId);
+        allow delete: if false;
+      }
+
+      // Club events subcollection
+      match /events/{eventId} {
+        allow read: if isClubMember(clubId);
+        allow create: if isClubAdmin(clubId);
+        allow update: if isClubAdmin(clubId);
+        allow delete: if isClubAdmin(clubId);
+      }
+
+      // Club attendance subcollection
+      match /attendance/{attendanceId} {
+        allow read: if isClubMember(clubId);
+        allow create: if isClubAdmin(clubId);
+        allow update: if isClubAdmin(clubId);
+        allow delete: if isClubAdmin(clubId);
+      }
+
+      // Club documents subcollection
+      match /documents/{documentId} {
+        allow read: if isClubMember(clubId);
+        allow create: if isClubAdmin(clubId);
+        allow update: if isClubAdmin(clubId);
+        allow delete: if isClubAdmin(clubId);
+      }
+
+      // Club settings subcollection
+      match /settings/{settingId} {
+        allow read: if isClubMember(clubId);
+        allow write: if isClubAdmin(clubId);
+      }
+    }
+
+    // Payment transactions (global for webhook processing)
+    match /transactions/{transactionId} {
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if false; // Only server-side
+      allow update: if false; // Only server-side
+      allow delete: if false;
+    }
+
+    // Notifications
+    match /notifications/{notificationId} {
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if false; // Only server-side
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+  }
+}
