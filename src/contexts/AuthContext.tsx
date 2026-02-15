@@ -46,9 +46,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
       if (firebaseUser) {
-        const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
-        if (userDoc.exists()) {
-          setUserData(userDoc.data() as User);
+        try {
+          const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
+          if (userDoc.exists()) {
+            setUserData(userDoc.data() as User);
+          } else {
+            setUserData(null);
+          }
+        } catch (err) {
+          console.error('Failed to read user document from Firestore:', err);
+          setUserData(null);
         }
       } else {
         setUserData(null);
@@ -67,17 +74,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const credential = await createUserWithEmailAndPassword(auth, email, password);
     await updateProfile(credential.user, { displayName });
 
-    await setDoc(doc(db, 'users', credential.user.uid), {
-      uid: credential.user.uid,
-      email: credential.user.email,
-      displayName,
-      photoURL: null,
-      phone: null,
-      rut: null,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-      clubs: [],
-    });
+    try {
+      await setDoc(doc(db, 'users', credential.user.uid), {
+        uid: credential.user.uid,
+        email: credential.user.email,
+        displayName,
+        photoURL: null,
+        phone: null,
+        rut: null,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        clubs: [],
+      });
+    } catch (err) {
+      console.error('Failed to create user document in Firestore:', err);
+    }
   };
 
   const signInWithGoogle = async () => {
