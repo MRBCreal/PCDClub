@@ -1,5 +1,6 @@
 import {
   collection,
+  collectionGroup,
   doc,
   getDoc,
   getDocs,
@@ -35,20 +36,6 @@ export async function createClub(data: Omit<Club, 'id' | 'createdAt' | 'updatedA
   };
   await setDoc(clubRef, clubData);
 
-  const memberRef = doc(db, 'clubs', clubRef.id, 'members', data.ownerId);
-  await setDoc(memberRef, {
-    id: data.ownerId,
-    userId: data.ownerId,
-    clubId: clubRef.id,
-    firstName: '',
-    lastName: '',
-    email: data.email,
-    role: 'owner',
-    joinedAt: serverTimestamp(),
-    isActive: true,
-    balance: 0,
-  });
-
   return clubRef.id;
 }
 
@@ -61,6 +48,22 @@ export async function getUserClubs(userId: string): Promise<Club[]> {
   const q = query(collection(db, 'clubs'), where('ownerId', '==', userId));
   const snapshot = await getDocs(q);
   return snapshot.docs.map(d => d.data() as Club);
+}
+
+export async function getUserClubsForUser(userId: string): Promise<Club[]> {
+  const q = query(collectionGroup(db, 'members'), where('userId', '==', userId));
+  const snapshot = await getDocs(q);
+
+  const clubIds = Array.from(new Set(snapshot.docs
+    .map(d => (d.data() as { clubId?: string }).clubId)
+    .filter((id): id is string => typeof id === 'string' && id.length > 0)));
+
+  const clubs = await Promise.all(clubIds.map(async (clubId) => {
+    const clubDoc = await getDoc(doc(db, 'clubs', clubId));
+    return clubDoc.exists() ? (clubDoc.data() as Club) : null;
+  }));
+
+  return clubs.filter((c): c is Club => c != null);
 }
 
 export async function updateClub(clubId: string, data: Partial<Club>): Promise<void> {

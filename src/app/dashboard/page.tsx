@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
-import { getUserClubs } from '@/lib/firestore';
+import { getUserClubsForUser } from '@/lib/firestore';
 import { Club } from '@/types';
 import {
   Zap, Plus, Users, CreditCard, BarChart3, Settings,
@@ -15,7 +15,7 @@ import {
 import toast from 'react-hot-toast';
 
 export default function DashboardPage() {
-  const { user, userData, loading, signOut } = useAuth();
+  const { user, userData, isSuperAdmin, loading, signOut } = useAuth();
   const router = useRouter();
   const [clubs, setClubs] = useState<Club[]>([]);
   const [selectedClub, setSelectedClub] = useState<Club | null>(null);
@@ -30,10 +30,16 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (user) {
-      getUserClubs(user.uid).then((data) => {
-        setClubs(data);
-        if (data.length > 0) setSelectedClub(data[0]);
-      });
+      getUserClubsForUser(user.uid)
+        .then((data) => {
+          setClubs(data);
+          if (data.length > 0) setSelectedClub(data[0]);
+        })
+        .catch((err) => {
+          console.error('Failed to load user clubs:', err);
+          setClubs([]);
+          setSelectedClub(null);
+        });
     }
   }, [user]);
 
@@ -129,10 +135,17 @@ export default function DashboardPage() {
                 </div>
               </div>
             ) : (
-              <Link href="/dashboard/crear-club" className="flex items-center gap-2 p-2 bg-primary-50 rounded-xl hover:bg-primary-100 transition-colors">
-                <Plus className="w-5 h-5 text-primary-600" />
-                <span className="text-sm font-medium text-primary-600">Crear Club</span>
-              </Link>
+              isSuperAdmin ? (
+                <Link href="/dashboard/crear-club" className="flex items-center gap-2 p-2 bg-primary-50 rounded-xl hover:bg-primary-100 transition-colors">
+                  <Plus className="w-5 h-5 text-primary-600" />
+                  <span className="text-sm font-medium text-primary-600">Crear Club</span>
+                </Link>
+              ) : (
+                <div className="p-2 bg-gray-50 rounded-xl">
+                  <p className="text-sm font-medium text-gray-700">Sin club asignado</p>
+                  <p className="text-xs text-gray-500">Pide a un SuperAdmin que te asigne un club</p>
+                </div>
+              )
             )}
           </div>
 

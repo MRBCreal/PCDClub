@@ -8,6 +8,12 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // Helper: Global super admin
+    function isSuperAdmin() {
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/superadmins/$(request.auth.uid));
+    }
+
     // Helper: Check if user is the document owner
     function isOwner(userId) {
       return isAuthenticated() && request.auth.uid == userId;
@@ -25,6 +31,12 @@ service cloud.firestore {
       return hasClubRole(clubId, 'admin') || hasClubRole(clubId, 'owner');
     }
 
+    // Helper: can manage membership roles in a club
+    function canAssignClubRole(clubId, newRole) {
+      return (isSuperAdmin() && (newRole == 'owner' || newRole == 'admin' || newRole == 'member' || newRole == 'parent')) ||
+        (isClubAdmin(clubId) && (newRole == 'member' || newRole == 'parent'));
+    }
+
     // Helper: Check if user is a member of the club
     function isClubMember(clubId) {
       return isAuthenticated() &&
@@ -34,70 +46,82 @@ service cloud.firestore {
     // Users collection
     match /users/{userId} {
       allow read: if isAuthenticated();
-      allow create: if isOwner(userId);
-      allow update: if isOwner(userId);
+      allow create: if isOwner(userId) || isSuperAdmin();
+      allow update: if isOwner(userId) || isSuperAdmin();
       allow delete: if false;
+    }
+
+    // Superadmins collection
+    match /superadmins/{adminId} {
+      allow read: if isOwner(adminId) || isSuperAdmin();
+      allow create, update, delete: if false;
     }
 
     // Clubs collection
     match /clubs/{clubId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update: if isClubAdmin(clubId);
-      allow delete: if hasClubRole(clubId, 'owner');
+      allow create: if isSuperAdmin();
+      allow update: if isSuperAdmin() || isClubAdmin(clubId);
+      allow delete: if isSuperAdmin() || hasClubRole(clubId, 'owner');
 
       // Club members subcollection
       match /members/{memberId} {
-        allow read: if isClubMember(clubId);
-        allow create: if isClubAdmin(clubId);
-        allow update: if isClubAdmin(clubId) || isOwner(memberId);
-        allow delete: if isClubAdmin(clubId);
+        allow read: if isSuperAdmin() || isClubMember(clubId);
+
+        // Create / update allowed, but constrain role assignment to prevent escalation
+        allow create: if (isSuperAdmin() || isClubAdmin(clubId)) &&
+          (!('role' in request.resource.data) || canAssignClubRole(clubId, request.resource.data.role));
+
+        allow update: if (isSuperAdmin() || isClubAdmin(clubId) || isOwner(memberId)) &&
+          (!('role' in request.resource.data) || canAssignClubRole(clubId, request.resource.data.role));
+
+        allow delete: if isSuperAdmin() || isClubAdmin(clubId);
       }
 
       // Club payments subcollection
       match /payments/{paymentId} {
-        allow read: if isClubMember(clubId);
-        allow create: if isClubAdmin(clubId) || isOwner(resource.data.memberId);
-        allow update: if isClubAdmin(clubId);
+        allow read: if isSuperAdmin() || isClubMember(clubId);
+        allow create: if isSuperAdmin() || isClubAdmin(clubId) || isOwner(resource.data.memberId);
+        allow update: if isSuperAdmin() || isClubAdmin(clubId);
         allow delete: if false;
       }
 
       // Club invoices subcollection
       match /invoices/{invoiceId} {
-        allow read: if isClubMember(clubId);
-        allow create: if isClubAdmin(clubId);
-        allow update: if isClubAdmin(clubId);
+        allow read: if isSuperAdmin() || isClubMember(clubId);
+        allow create: if isSuperAdmin() || isClubAdmin(clubId);
+        allow update: if isSuperAdmin() || isClubAdmin(clubId);
         allow delete: if false;
       }
 
       // Club events subcollection
       match /events/{eventId} {
-        allow read: if isClubMember(clubId);
-        allow create: if isClubAdmin(clubId);
-        allow update: if isClubAdmin(clubId);
-        allow delete: if isClubAdmin(clubId);
+        allow read: if isSuperAdmin() || isClubMember(clubId);
+        allow create: if isSuperAdmin() || isClubAdmin(clubId);
+        allow update: if isSuperAdmin() || isClubAdmin(clubId);
+        allow delete: if isSuperAdmin() || isClubAdmin(clubId);
       }
 
       // Club attendance subcollection
       match /attendance/{attendanceId} {
-        allow read: if isClubMember(clubId);
-        allow create: if isClubAdmin(clubId);
-        allow update: if isClubAdmin(clubId);
-        allow delete: if isClubAdmin(clubId);
+        allow read: if isSuperAdmin() || isClubMember(clubId);
+        allow create: if isSuperAdmin() || isClubAdmin(clubId);
+        allow update: if isSuperAdmin() || isClubAdmin(clubId);
+        allow delete: if isSuperAdmin() || isClubAdmin(clubId);
       }
 
       // Club documents subcollection
       match /documents/{documentId} {
-        allow read: if isClubMember(clubId);
-        allow create: if isClubAdmin(clubId);
-        allow update: if isClubAdmin(clubId);
-        allow delete: if isClubAdmin(clubId);
+        allow read: if isSuperAdmin() || isClubMember(clubId);
+        allow create: if isSuperAdmin() || isClubAdmin(clubId);
+        allow update: if isSuperAdmin() || isClubAdmin(clubId);
+        allow delete: if isSuperAdmin() || isClubAdmin(clubId);
       }
 
       // Club settings subcollection
       match /settings/{settingId} {
-        allow read: if isClubMember(clubId);
-        allow write: if isClubAdmin(clubId);
+        allow read: if isSuperAdmin() || isClubMember(clubId);
+        allow write: if isSuperAdmin() || isClubAdmin(clubId);
       }
     }
 

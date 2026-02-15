@@ -19,6 +19,7 @@ import { User } from '@/types';
 interface AuthContextType {
   user: FirebaseUser | null;
   userData: User | null;
+  isSuperAdmin: boolean;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, displayName: string) => Promise<void>;
@@ -40,6 +41,7 @@ export function useAuth() {
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [userData, setUserData] = useState<User | null>(null);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -57,8 +59,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           console.error('Failed to read user document from Firestore:', err);
           setUserData(null);
         }
+
+        try {
+          const superAdminDoc = await getDoc(doc(db, 'superadmins', firebaseUser.uid));
+          setIsSuperAdmin(superAdminDoc.exists());
+        } catch (err) {
+          console.error('Failed to read superadmin document from Firestore:', err);
+          setIsSuperAdmin(false);
+        }
       } else {
         setUserData(null);
+        setIsSuperAdmin(false);
       }
       setLoading(false);
     });
@@ -114,6 +125,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = async () => {
     await firebaseSignOut(auth);
     setUserData(null);
+    setIsSuperAdmin(false);
   };
 
   const resetPassword = async (email: string) => {
@@ -123,6 +135,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const value: AuthContextType = {
     user,
     userData,
+    isSuperAdmin,
     loading,
     signIn,
     signUp,
