@@ -35,6 +35,9 @@ next-env.d.ts
 
 # firebase
 .firebase/
+
+# agent/IDE
+.agent/
 firebase-debug.log
 firestore-debug.log
 ui-debug.log

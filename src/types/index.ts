@@ -204,3 +204,28 @@ export interface DashboardStats {
   recentPayments: Payment[];
   monthlyRevenue: { month: string; amount: number }[];
 }
+
+export interface Court {
+  id: string;
+  clubId: string;
+  name: string;
+  type: string;
+  pricePerHour: number;
+  isActive: boolean;
+  description?: string;
+}
+
+export interface Booking {
+  id: string;
+  clubId: string;
+  courtId: string;
+  courtName: string;
+  memberId?: string;
+  memberName: string;
+  startTime: Timestamp;
+  endTime: Timestamp;
+  totalPrice: number;
+  status: 'confirmed' | 'cancelled' | 'pending';
+  paymentId?: string;
+  createdAt: Timestamp;
+}

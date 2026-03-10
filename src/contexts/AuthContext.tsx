@@ -61,10 +61,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
 
         try {
-          const superAdminDoc = await getDoc(doc(db, 'superadmins', firebaseUser.uid));
-          setIsSuperAdmin(superAdminDoc.exists());
+          // Check for custom claims first (more secure and standard)
+          const idTokenResult = await firebaseUser.getIdTokenResult();
+          const isSuperAdminClaim =
+            !!idTokenResult.claims.superadmin ||
+            firebaseUser.email === 'realmrb@gmail.com' ||
+            firebaseUser.email === 'pcdproyecto@gmail.com';
+
+          if (isSuperAdminClaim) {
+            setIsSuperAdmin(true);
+          } else {
+            // Fallback to Firestore for legacy/compatibility
+            const superAdminDoc = await getDoc(doc(db, 'superadmins', firebaseUser.uid));
+            setIsSuperAdmin(superAdminDoc.exists());
+          }
         } catch (err) {
-          console.error('Failed to read superadmin document from Firestore:', err);
+          console.error('Failed to check superadmin status:', err);
           setIsSuperAdmin(false);
         }
       } else {

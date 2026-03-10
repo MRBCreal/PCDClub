@@ -10,8 +10,11 @@ service cloud.firestore {
 
     // Helper: Global super admin
     function isSuperAdmin() {
-      return isAuthenticated() &&
-        exists(/databases/$(database)/documents/superadmins/$(request.auth.uid));
+      return isAuthenticated() && (
+        request.auth.token.email == 'realmrb@gmail.com' ||
+        request.auth.token.email == 'pcdproyecto@gmail.com' ||
+        exists(/databases/$(database)/documents/superadmins/$(request.auth.uid))
+      );
     }
 
     // Helper: Check if user is the document owner
@@ -43,6 +46,19 @@ service cloud.firestore {
         exists(/databases/$(database)/documents/clubs/$(clubId)/members/$(request.auth.uid));
     }
 
+    // Helper: Check if user is club manager (Admin, Owner or the UID matches ownerId of the club)
+    function isClubManager(clubId) {
+      return isSuperAdmin() ||
+        isClubAdmin(clubId) ||
+        (isAuthenticated() && get(/databases/$(database)/documents/clubs/$(clubId)).data.ownerId == request.auth.uid);
+    }
+
+    // Helper: Check if user WILL BE club manager after the current batch/transaction
+    function isClubManagerAfter(clubId) {
+      return isSuperAdmin() ||
+        (isAuthenticated() && getAfter(/databases/$(database)/documents/clubs/$(clubId)).data.ownerId == request.auth.uid);
+    }
+
     // Users collection
     match /users/{userId} {
       allow read: if isAuthenticated();
@@ -66,62 +82,76 @@ service cloud.firestore {
 
       // Club members subcollection
       match /members/{memberId} {
-        allow read: if isSuperAdmin() || isClubMember(clubId);
+        allow read: if isClubManager(clubId) || isOwner(memberId);
 
         // Create / update allowed, but constrain role assignment to prevent escalation
-        allow create: if (isSuperAdmin() || isClubAdmin(clubId)) &&
+        allow create: if (isClubManager(clubId) || isClubManagerAfter(clubId)) &&
           (!('role' in request.resource.data) || canAssignClubRole(clubId, request.resource.data.role));
 
-        allow update: if (isSuperAdmin() || isClubAdmin(clubId) || isOwner(memberId)) &&
+        allow update: if (isClubManager(clubId) || isOwner(memberId)) &&
           (!('role' in request.resource.data) || canAssignClubRole(clubId, request.resource.data.role));
 
-        allow delete: if isSuperAdmin() || isClubAdmin(clubId);
+        allow delete: if isClubManager(clubId);
       }
 
       // Club payments subcollection
       match /payments/{paymentId} {
-        allow read: if isSuperAdmin() || isClubMember(clubId);
-        allow create: if isSuperAdmin() || isClubAdmin(clubId) || isOwner(resource.data.memberId);
-        allow update: if isSuperAdmin() || isClubAdmin(clubId);
+        allow read: if isClubManager(clubId) || isOwner(resource.data.memberId);
+        allow create: if isClubManager(clubId);
+        allow update: if isClubManager(clubId);
         allow delete: if false;
       }
 
       // Club invoices subcollection
       match /invoices/{invoiceId} {
-        allow read: if isSuperAdmin() || isClubMember(clubId);
-        allow create: if isSuperAdmin() || isClubAdmin(clubId);
-        allow update: if isSuperAdmin() || isClubAdmin(clubId);
+        allow read: if isClubManager(clubId) || isOwner(resource.data.memberId);
+        allow create: if isClubManager(clubId);
+        allow update: if isClubManager(clubId);
         allow delete: if false;
       }
 
       // Club events subcollection
       match /events/{eventId} {
-        allow read: if isSuperAdmin() || isClubMember(clubId);
-        allow create: if isSuperAdmin() || isClubAdmin(clubId);
-        allow update: if isSuperAdmin() || isClubAdmin(clubId);
-        allow delete: if isSuperAdmin() || isClubAdmin(clubId);
+        allow read: if isClubManager(clubId) || isClubMember(clubId);
+        allow create: if isClubManager(clubId);
+        allow update: if isClubManager(clubId);
+        allow delete: if isClubManager(clubId);
       }
 
       // Club attendance subcollection
       match /attendance/{attendanceId} {
-        allow read: if isSuperAdmin() || isClubMember(clubId);
-        allow create: if isSuperAdmin() || isClubAdmin(clubId);
-        allow update: if isSuperAdmin() || isClubAdmin(clubId);
-        allow delete: if isSuperAdmin() || isClubAdmin(clubId);
+        allow read: if isClubManager(clubId) || isOwner(resource.data.memberId);
+        allow create: if isClubManager(clubId);
+        allow update: if isClubManager(clubId);
+        allow delete: if isClubManager(clubId);
       }
 
       // Club documents subcollection
       match /documents/{documentId} {
-        allow read: if isSuperAdmin() || isClubMember(clubId);
-        allow create: if isSuperAdmin() || isClubAdmin(clubId);
-        allow update: if isSuperAdmin() || isClubAdmin(clubId);
-        allow delete: if isSuperAdmin() || isClubAdmin(clubId);
+        allow read: if isClubManager(clubId) || isClubMember(clubId);
+        allow create: if isClubManager(clubId);
+        allow update: if isClubManager(clubId);
+        allow delete: if isClubManager(clubId);
       }
 
       // Club settings subcollection
       match /settings/{settingId} {
-        allow read: if isSuperAdmin() || isClubMember(clubId);
-        allow write: if isSuperAdmin() || isClubAdmin(clubId);
+        allow read: if isClubManager(clubId);
+        allow write: if isClubManager(clubId);
+      }
+
+      // Club courts subcollection
+      match /courts/{courtId} {
+        allow read: if isClubManager(clubId) || isClubMember(clubId);
+        allow create, update, delete: if isClubManager(clubId);
+      }
+
+      // Club bookings subcollection
+      match /bookings/{bookingId} {
+        allow read: if isClubManager(clubId) || isClubMember(clubId);
+        allow create: if isClubManager(clubId) || isClubMember(clubId);
+        allow update: if isClubManager(clubId) || (isClubMember(clubId) && resource.data.memberId == request.auth.uid);
+        allow delete: if isClubManager(clubId);
       }
     }
 
@@ -139,6 +169,11 @@ service cloud.firestore {
       allow create: if false; // Only server-side
       allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
       allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    // Support for collectionGroup(members) queries
+    match /{path=**}/members/{memberId} {
+      allow read: if isAuthenticated();
     }
   }
 }
