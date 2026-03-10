@@ -543,6 +543,7 @@ function CourtModal({ clubId, court, onClose, onSaved }: CourtModalProps) {
             <select className="input-field" value={form.type} onChange={e => setForm({ ...form, type: e.target.value })}>
               <option value="Paddle">Paddle</option>
               <option value="Tenis">Tenis</option>
+              <option value="Basketball">Basketball</option>
               <option value="Futbol">Fútbol</option>
               <option value="Otro">Otro</option>
             </select>
@@ -615,16 +616,22 @@ function BookingModal({ clubId, courts, members, booking, onClose, onSaved }: Bo
       const hours = Number(form.duration) / 60;
       const totalPrice = hours * (court?.pricePerHour ?? 0);
 
-      const bookingData = {
+      const bookingData: any = {
         courtId: form.courtId,
         courtName: court?.name ?? 'Cancha',
-        memberId: form.memberId || undefined,
-        memberName: form.memberId ? `${member?.firstName} ${member?.lastName}` : form.memberName,
         startTime: Timestamp.fromDate(startDate),
         endTime: Timestamp.fromDate(endDate),
         totalPrice,
         status: form.status as any,
       };
+
+      // Only add memberId and memberName if they exist
+      if (form.memberId) {
+        bookingData.memberId = form.memberId;
+        bookingData.memberName = `${member?.firstName} ${member?.lastName}`;
+      } else if (form.memberName) {
+        bookingData.memberName = form.memberName;
+      }
 
       if (booking) {
         await updateBooking(clubId, booking.id, bookingData);
@@ -719,8 +726,6 @@ export default function DashboardPage() {
   const router = useRouter();
   const [clubs, setClubs] = useState<Club[]>([]);
   const [selectedClub, setSelectedClub] = useState<Club | null>(null);
-
-  console.log('[Dashboard] isSuperAdmin:', isSuperAdmin, 'user:', user?.email);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
 

@@ -62,30 +62,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         try {
           // Check hardcoded emails first (simplest and most reliable)
-          const isHardcodedSuperAdmin =
-            firebaseUser.email === 'realmrb@gmail.com' ||
-            firebaseUser.email === 'pcdproyecto@gmail.com';
-
-          console.log('[AuthContext] SuperAdmin check:', {
-            email: firebaseUser.email,
-            isHardcodedSuperAdmin,
-          });
-
-          if (isHardcodedSuperAdmin) {
+          const hardcodedEmails = ['realmrb@gmail.com', 'pcdproyecto@gmail.com'];
+      
+          if (firebaseUser.email && hardcodedEmails.includes(firebaseUser.email.toLowerCase())) {
             setIsSuperAdmin(true);
-            console.log('[AuthContext] ✅ User is SuperAdmin (hardcoded email)');
           } else {
             // Check custom claims
             const idTokenResult = await firebaseUser.getIdTokenResult();
             if (idTokenResult.claims.superadmin) {
               setIsSuperAdmin(true);
-              console.log('[AuthContext] ✅ User is SuperAdmin (custom claim)');
             } else {
-              // Fallback to Firestore
-              const superAdminDoc = await getDoc(doc(db, 'superadmins', firebaseUser.uid));
-              const exists = superAdminDoc.exists();
-              setIsSuperAdmin(exists);
-              console.log('[AuthContext] SuperAdmin from Firestore:', exists);
+              // Fallback: check Firestore
+              try {
+                const superadminDoc = await getDoc(doc(db, 'superadmins', firebaseUser.uid));
+                setIsSuperAdmin(superadminDoc.exists());
+              } catch (err) {
+                console.error('Error checking superadmin status:', err);
+                setIsSuperAdmin(false);
+              }
             }
           }
         } catch (err) {
