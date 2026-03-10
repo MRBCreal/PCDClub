@@ -717,6 +717,8 @@ export default function DashboardPage() {
   const router = useRouter();
   const [clubs, setClubs] = useState<Club[]>([]);
   const [selectedClub, setSelectedClub] = useState<Club | null>(null);
+
+  console.log('[Dashboard] isSuperAdmin:', isSuperAdmin, 'user:', user?.email);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
 
@@ -978,14 +980,28 @@ export default function DashboardPage() {
           {/* Club Selector */}
           <div className="px-4 py-3 border-b border-gray-100">
             {selectedClub ? (
-              <div className="flex items-center gap-3 p-2 bg-gray-50 rounded-xl">
-                <div className="w-8 h-8 bg-primary-100 rounded-lg flex items-center justify-center">
-                  <span className="text-sm font-bold text-primary-600">{selectedClub.name.charAt(0)}</span>
+              <div className="space-y-2">
+                <div className="flex items-center gap-3 p-2 bg-gray-50 rounded-xl">
+                  <div className="w-8 h-8 bg-primary-100 rounded-lg flex items-center justify-center">
+                    <span className="text-sm font-bold text-primary-600">{selectedClub.name.charAt(0)}</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 truncate">{selectedClub.name}</p>
+                    <p className="text-xs text-gray-500">{selectedClub.memberCount} socios</p>
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">{selectedClub.name}</p>
-                  <p className="text-xs text-gray-500">{selectedClub.memberCount} socios</p>
-                </div>
+                {isSuperAdmin && (
+                  <div className="space-y-2">
+                    <Link href="/dashboard/crear-club" className="flex items-center gap-2 p-2 bg-primary-50 rounded-xl hover:bg-primary-100 transition-colors">
+                      <Plus className="w-5 h-5 text-primary-600" />
+                      <span className="text-sm font-medium text-primary-600">Crear Nuevo Club</span>
+                    </Link>
+                    <Link href="/dashboard/admin" className="flex items-center gap-2 p-2 bg-accent-50 rounded-xl hover:bg-accent-100 transition-colors">
+                      <Users className="w-5 h-5 text-accent-600" />
+                      <span className="text-sm font-medium text-accent-600">Gestionar Usuarios</span>
+                    </Link>
+                  </div>
+                )}
               </div>
             ) : (
               isSuperAdmin ? (
@@ -1028,7 +1044,10 @@ export default function DashboardPage() {
                 </span>
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900 truncate">{user.displayName || 'Usuario'}</p>
+                <p className="text-sm font-medium text-gray-900 truncate">
+                  {user.displayName || 'Usuario'}
+                  {isSuperAdmin && <span className="ml-1 text-xs bg-accent-500 text-white px-1.5 py-0.5 rounded">SuperAdmin</span>}
+                </p>
                 <p className="text-xs text-gray-500 truncate">{user.email}</p>
               </div>
               <button onClick={handleSignOut} className="p-1.5 text-gray-400 hover:text-red-500 transition-colors" title="Cerrar sesión">
