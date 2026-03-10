@@ -1592,12 +1592,12 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {activeTab === 'settings' && selectedClub && (
-            <SettingsTab club={selectedClub} onUpdate={() => {}} />
+          {activeTab === 'settings' && isSuperAdmin && (
+            <SuperAdminSettings />
           )}
 
-          {activeTab === 'settings' && !selectedClub && isSuperAdmin && (
-            <SuperAdminSettings />
+          {activeTab === 'settings' && !isSuperAdmin && selectedClub && (
+            <SettingsTab club={selectedClub} onUpdate={() => {}} />
           )}
 
           {['documents', 'reports'].includes(activeTab) && (
