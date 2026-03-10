@@ -21,7 +21,7 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { Club, Member, Payment, Invoice, Event, Attendance, ClubDocument, ClubSettings, DashboardStats, Notification, Court, Booking } from '@/types';
+import { Club, Member, Payment, Invoice, Event, Attendance, ClubDocument, ClubSettings, DashboardStats, Notification, Court, Booking, Match, PlayerCategory } from '@/types';
 
 // ==================== CLUBS ====================
 
@@ -497,4 +497,125 @@ export async function updateBooking(clubId: string, bookingId: string, data: Par
 
 export async function deleteBooking(clubId: string, bookingId: string): Promise<void> {
   await deleteDoc(doc(db, 'clubs', clubId, 'bookings', bookingId));
+}
+
+// ==================== MATCHES ====================
+
+export async function getMatches(clubId: string, constraints: QueryConstraint[] = []): Promise<Match[]> {
+  const q = query(collection(db, 'clubs', clubId, 'matches'), ...constraints);
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Match));
+}
+
+export async function createMatch(clubId: string, userId: string, data: Omit<Match, 'id' | 'createdAt' | 'createdBy' | 'paymentIds'>): Promise<string> {
+  const matchRef = doc(collection(db, 'clubs', clubId, 'matches'));
+  await setDoc(matchRef, {
+    ...data,
+    id: matchRef.id,
+    paymentIds: [],
+    createdAt: serverTimestamp(),
+    createdBy: userId,
+  });
+  return matchRef.id;
+}
+
+export async function createMatchWithPayments(
+  clubId: string,
+  userId: string,
+  matchData: Omit<Match, 'id' | 'createdAt' | 'createdBy' | 'paymentIds' | 'participants' | 'participantNames'>,
+  members: Member[]
+): Promise<string> {
+  const batch = writeBatch(db);
+  
+  // Filter members by category
+  const eligibleMembers = members.filter(m => 
+    m.isActive && 
+    m.category && 
+    (matchData.category === 'mixto' || m.category === matchData.category)
+  );
+
+  const matchRef = doc(collection(db, 'clubs', clubId, 'matches'));
+  const matchId = matchRef.id;
+  
+  const paymentIds: string[] = [];
+  const participants: string[] = [];
+  const participantNames: string[] = [];
+
+  // Create payments for each eligible member
+  for (const member of eligibleMembers) {
+    const paymentRef = doc(collection(db, 'clubs', clubId, 'payments'));
+    const paymentId = paymentRef.id;
+    
+    batch.set(paymentRef, {
+      id: paymentId,
+      clubId,
+      memberId: member.id,
+      memberName: `${member.firstName} ${member.lastName}`,
+      amount: matchData.cost,
+      currency: 'CLP',
+      concept: matchData.title,
+      description: matchData.description || '',
+      status: 'pending',
+      method: 'transfer',
+      dueDate: matchData.date,
+      isRecurring: false,
+      matchId,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    
+    paymentIds.push(paymentId);
+    participants.push(member.id);
+    participantNames.push(`${member.firstName} ${member.lastName}`);
+  }
+
+  // Create the match
+  batch.set(matchRef, {
+    ...matchData,
+    id: matchId,
+    participants,
+    participantNames,
+    paymentIds,
+    createdAt: serverTimestamp(),
+    createdBy: userId,
+  });
+
+  await batch.commit();
+  return matchId;
+}
+
+export async function createBulkMatches(
+  clubId: string,
+  userId: string,
+  matches: Array<Omit<Match, 'id' | 'createdAt' | 'createdBy' | 'paymentIds' | 'participants' | 'participantNames'>>,
+  members: Member[]
+): Promise<string[]> {
+  const matchIds: string[] = [];
+  
+  for (const matchData of matches) {
+    const matchId = await createMatchWithPayments(clubId, userId, matchData, members);
+    matchIds.push(matchId);
+  }
+  
+  return matchIds;
+}
+
+export async function updateMatch(clubId: string, matchId: string, data: Partial<Match>): Promise<void> {
+  await updateDoc(doc(db, 'clubs', clubId, 'matches', matchId), data);
+}
+
+export async function deleteMatch(clubId: string, matchId: string): Promise<void> {
+  // Delete associated payments
+  const matchDoc = await getDoc(doc(db, 'clubs', clubId, 'matches', matchId));
+  if (matchDoc.exists()) {
+    const match = matchDoc.data() as Match;
+    const batch = writeBatch(db);
+    
+    for (const paymentId of match.paymentIds || []) {
+      batch.delete(doc(db, 'clubs', clubId, 'payments', paymentId));
+    }
+    
+    batch.delete(doc(db, 'clubs', clubId, 'matches', matchId));
+    await batch.commit();
+  }
 }

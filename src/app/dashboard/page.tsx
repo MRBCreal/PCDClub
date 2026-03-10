@@ -175,8 +175,14 @@ function MemberModal({ clubId, member, onClose, onSaved }: MemberModalProps) {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Categoría</label>
-              <input className="input-field" value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} placeholder="Ej: Infantil, Adulto" />
+              <label className="block text-sm font-medium text-gray-700 mb-1">Categoría de Jugador</label>
+              <select className="input-field" value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}>
+                <option value="">Sin categoría</option>
+                <option value="infantil">Infantil</option>
+                <option value="juvenil">Juvenil</option>
+                <option value="adulto">Adulto</option>
+                <option value="senior">Senior</option>
+              </select>
             </div>
           </div>
           <div>

@@ -229,3 +229,24 @@ export interface Booking {
   paymentId?: string;
   createdAt: Timestamp;
 }
+
+export type PlayerCategory = 'infantil' | 'juvenil' | 'adulto' | 'senior' | 'mixto';
+
+export interface Match {
+  id: string;
+  clubId: string;
+  eventId?: string;
+  title: string;
+  description?: string;
+  category: PlayerCategory;
+  opponent?: string;
+  location?: string;
+  date: Timestamp;
+  cost: number;
+  participants: string[];
+  participantNames: string[];
+  paymentIds: string[];
+  status: 'scheduled' | 'completed' | 'cancelled';
+  createdAt: Timestamp;
+  createdBy: string;
+}
