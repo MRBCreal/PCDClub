@@ -42,6 +42,8 @@ import {
   ChevronDown, MapPin, LayoutGrid, Trophy,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import SettingsTab from '@/components/SettingsTab';
+import SuperAdminSettings from '@/components/SuperAdminSettings';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -990,25 +992,16 @@ export default function DashboardPage() {
                     <p className="text-xs text-gray-500">{selectedClub.memberCount} socios</p>
                   </div>
                 </div>
-                {isSuperAdmin && (
-                  <div className="space-y-2">
-                    <Link href="/dashboard/crear-club" className="flex items-center gap-2 p-2 bg-primary-50 rounded-xl hover:bg-primary-100 transition-colors">
-                      <Plus className="w-5 h-5 text-primary-600" />
-                      <span className="text-sm font-medium text-primary-600">Crear Nuevo Club</span>
-                    </Link>
-                    <Link href="/dashboard/admin" className="flex items-center gap-2 p-2 bg-accent-50 rounded-xl hover:bg-accent-100 transition-colors">
-                      <Users className="w-5 h-5 text-accent-600" />
-                      <span className="text-sm font-medium text-accent-600">Gestionar Usuarios</span>
-                    </Link>
-                  </div>
-                )}
               </div>
             ) : (
               isSuperAdmin ? (
-                <Link href="/dashboard/crear-club" className="flex items-center gap-2 p-2 bg-primary-50 rounded-xl hover:bg-primary-100 transition-colors">
+                <button 
+                  onClick={() => setActiveTab('settings')}
+                  className="flex items-center gap-2 p-2 bg-primary-50 rounded-xl hover:bg-primary-100 transition-colors w-full"
+                >
                   <Plus className="w-5 h-5 text-primary-600" />
-                  <span className="text-sm font-medium text-primary-600">Crear Club</span>
-                </Link>
+                  <span className="text-sm font-medium text-primary-600">Ir a Configuración</span>
+                </button>
               ) : (
                 <div className="p-2 bg-gray-50 rounded-xl">
                   <p className="text-sm font-medium text-gray-700">Sin club asignado</p>
@@ -1599,7 +1592,15 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {['documents', 'reports', 'settings'].includes(activeTab) && (
+          {activeTab === 'settings' && selectedClub && (
+            <SettingsTab club={selectedClub} onUpdate={() => {}} />
+          )}
+
+          {activeTab === 'settings' && !selectedClub && isSuperAdmin && (
+            <SuperAdminSettings />
+          )}
+
+          {['documents', 'reports'].includes(activeTab) && (
             <div className="card p-6 animate-fade-in">
               <div className="text-center py-12 text-gray-400">
                 <Settings className="w-12 h-12 mx-auto mb-4 opacity-50" />
