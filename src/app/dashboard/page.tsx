@@ -30,8 +30,13 @@ import {
   updateBooking,
   deleteBooking,
   updateClub,
+  getMatches,
+  createMatchWithPayments,
+  createBulkMatches,
+  updateMatch,
+  deleteMatch,
 } from '@/lib/firestore';
-import { Club, Member, Payment, DashboardStats, PaymentStatus, PaymentMethod, UserRole, Event, Court, Booking } from '@/types';
+import { Club, Member, Payment, DashboardStats, PaymentStatus, PaymentMethod, UserRole, Event, Court, Booking, Match, PlayerCategory } from '@/types';
 import { Timestamp } from 'firebase/firestore';
 import {
   Zap, Plus, Users, CreditCard, BarChart3, Settings,
@@ -780,6 +785,250 @@ function BookingModal({ clubId, courts, members, booking, onClose, onSaved }: Bo
   );
 }
 
+// ── Match Modal ──────────────────────────────────────────────────────────────
+
+interface MatchModalProps {
+  clubId: string;
+  userId: string;
+  members: Member[];
+  match: Match | null;
+  onClose: () => void;
+  onSaved: () => void;
+}
+
+function MatchModal({ clubId, userId, members, match, onClose, onSaved }: MatchModalProps) {
+  const [form, setForm] = useState({
+    title: match?.title ?? '',
+    description: match?.description ?? '',
+    category: (match?.category ?? 'adulto') as PlayerCategory,
+    opponent: match?.opponent ?? '',
+    location: match?.location ?? '',
+    date: match?.date instanceof Timestamp
+      ? match.date.toDate().toISOString().slice(0, 16)
+      : new Date().toISOString().slice(0, 16),
+    cost: match?.cost?.toString() ?? '5000',
+    status: (match?.status ?? 'scheduled') as 'scheduled' | 'completed' | 'cancelled',
+  });
+  const [saving, setSaving] = useState(false);
+
+  const eligibleMembers = members.filter(m => 
+    m.isActive && 
+    m.category && 
+    (form.category === 'mixto' || m.category === form.category)
+  );
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      const matchDate = Timestamp.fromDate(new Date(form.date));
+      
+      if (match) {
+        await updateMatch(clubId, match.id, {
+          title: form.title,
+          description: form.description,
+          category: form.category,
+          opponent: form.opponent,
+          location: form.location,
+          date: matchDate,
+          cost: Number(form.cost),
+          status: form.status,
+        });
+        toast.success('Partido actualizado');
+      } else {
+        await createMatchWithPayments(clubId, userId, {
+          clubId,
+          title: form.title,
+          description: form.description,
+          category: form.category,
+          opponent: form.opponent,
+          location: form.location,
+          date: matchDate,
+          cost: Number(form.cost),
+          status: 'scheduled',
+        }, members);
+        toast.success(`Partido creado con ${eligibleMembers.length} cobros generados`);
+      }
+      onSaved();
+      onClose();
+    } catch (error: any) {
+      toast.error(`Error: ${error.message}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between p-6 border-b border-gray-100">
+          <h2 className="text-lg font-semibold text-gray-900">{match ? 'Editar Partido' : 'Crear Partido'}</h2>
+          <button onClick={onClose} className="p-1.5 text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Título *</label>
+            <input className="input-field" value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="Ej: Amistoso vs Club X" required />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
+            <textarea className="input-field" rows={2} value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Categoría *</label>
+              <select className="input-field" value={form.category} onChange={e => setForm({ ...form, category: e.target.value as PlayerCategory })} required>
+                <option value="infantil">Infantil</option>
+                <option value="juvenil">Juvenil</option>
+                <option value="adulto">Adulto</option>
+                <option value="senior">Senior</option>
+                <option value="mixto">Mixto (todas)</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Costo por jugador (CLP) *</label>
+              <input type="number" min="0" className="input-field" value={form.cost} onChange={e => setForm({ ...form, cost: e.target.value })} required />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Rival</label>
+              <input className="input-field" value={form.opponent} onChange={e => setForm({ ...form, opponent: e.target.value })} placeholder="Ej: Club Deportivo X" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Lugar</label>
+              <input className="input-field" value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} placeholder="Ej: Cancha Municipal" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Fecha y Hora *</label>
+              <input type="datetime-local" className="input-field" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} required />
+            </div>
+            {match && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Estado</label>
+                <select className="input-field" value={form.status} onChange={e => setForm({ ...form, status: e.target.value as any })}>
+                  <option value="scheduled">Programado</option>
+                  <option value="completed">Completado</option>
+                  <option value="cancelled">Cancelado</option>
+                </select>
+              </div>
+            )}
+          </div>
+          {!match && (
+            <div className="p-3 bg-blue-50 rounded-lg">
+              <p className="text-sm text-blue-700">
+                <strong>{eligibleMembers.length}</strong> jugadores de categoría <strong>{form.category}</strong> recibirán un cobro de <strong>${Number(form.cost).toLocaleString('es-CL')}</strong>
+              </p>
+            </div>
+          )}
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={onClose} className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50">Cancelar</button>
+            <button type="submit" disabled={saving} className="flex-1 btn-primary disabled:opacity-50">{saving ? 'Guardando...' : match ? 'Actualizar' : 'Crear Partido'}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ── Bulk Match Modal ─────────────────────────────────────────────────────────
+
+interface BulkMatchModalProps {
+  clubId: string;
+  userId: string;
+  members: Member[];
+  onClose: () => void;
+  onSaved: () => void;
+}
+
+function BulkMatchModal({ clubId, userId, members, onClose, onSaved }: BulkMatchModalProps) {
+  const [bulkText, setBulkText] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      const lines = bulkText.trim().split('\n').filter(l => l.trim());
+      const matches: Array<Omit<Match, 'id' | 'createdAt' | 'createdBy' | 'paymentIds' | 'participants' | 'participantNames'>> = [];
+
+      for (const line of lines) {
+        const parts = line.split(',').map(p => p.trim());
+        if (parts.length < 4) continue;
+
+        const [title, category, dateStr, costStr, opponent = '', location = ''] = parts;
+        
+        matches.push({
+          clubId,
+          title,
+          category: category.toLowerCase() as PlayerCategory,
+          date: Timestamp.fromDate(new Date(dateStr)),
+          cost: Number(costStr),
+          opponent,
+          location,
+          description: '',
+          status: 'scheduled',
+        });
+      }
+
+      if (matches.length === 0) {
+        toast.error('No se encontraron partidos válidos');
+        return;
+      }
+
+      const matchIds = await createBulkMatches(clubId, userId, matches, members);
+      toast.success(`${matchIds.length} partidos creados con cobros automáticos`);
+      onSaved();
+      onClose();
+    } catch (error: any) {
+      toast.error(`Error: ${error.message}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between p-6 border-b border-gray-100">
+          <h2 className="text-lg font-semibold text-gray-900">Carga Masiva de Partidos</h2>
+          <button onClick={onClose} className="p-1.5 text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div className="p-4 bg-blue-50 rounded-lg space-y-2">
+            <p className="text-sm font-medium text-blue-900">Formato CSV (un partido por línea):</p>
+            <code className="block text-xs text-blue-700 bg-blue-100 p-2 rounded">
+              Título, Categoría, Fecha, Costo, Rival, Lugar
+            </code>
+            <p className="text-xs text-blue-600">
+              <strong>Ejemplo:</strong><br/>
+              Amistoso vs Club X, adulto, 2026-03-15 18:00, 5000, Club X, Cancha Municipal<br/>
+              Torneo Infantil, infantil, 2026-03-20 10:00, 3000, Club Y, Estadio Central
+            </p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Partidos (CSV)</label>
+            <textarea 
+              className="input-field font-mono text-sm" 
+              rows={10} 
+              value={bulkText} 
+              onChange={e => setBulkText(e.target.value)}
+              placeholder="Amistoso vs Club X, adulto, 2026-03-15 18:00, 5000, Club X, Cancha Municipal"
+              required
+            />
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={onClose} className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50">Cancelar</button>
+            <button type="submit" disabled={saving} className="flex-1 btn-primary disabled:opacity-50">{saving ? 'Creando...' : 'Crear Partidos'}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Dashboard ────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
@@ -821,6 +1070,13 @@ export default function DashboardPage() {
   const [bookingsLoading, setBookingsLoading] = useState(false);
   const [courtModal, setCourtModal] = useState<{ open: boolean; court: Court | null }>({ open: false, court: null });
   const [bookingModal, setBookingModal] = useState<{ open: boolean; booking: Booking | null }>({ open: false, booking: null });
+
+  // Matches state
+  const [matches, setMatches] = useState<Match[]>([]);
+  const [matchesLoading, setMatchesLoading] = useState(false);
+  const [matchModal, setMatchModal] = useState<{ open: boolean; match: Match | null }>({ open: false, match: null });
+  const [bulkMatchModal, setBulkMatchModal] = useState(false);
+  const [matchSearch, setMatchSearch] = useState('');
 
   useEffect(() => {
     if (!loading && !user) router.push('/login');
@@ -916,14 +1172,25 @@ export default function DashboardPage() {
     finally { setBookingsLoading(false); }
   }, [selectedClub]);
 
+  const loadMatches = useCallback(async () => {
+    if (!selectedClub) return;
+    setMatchesLoading(true);
+    try {
+      const m = await getMatches(selectedClub.id);
+      setMatches(m);
+    } catch { toast.error('Error al cargar partidos'); }
+    finally { setMatchesLoading(false); }
+  }, [selectedClub]);
+
   useEffect(() => {
     if (!selectedClub) return;
     if (activeTab === 'overview') loadStats();
     if (activeTab === 'members') loadMembers();
     if (activeTab === 'payments') { loadPayments(); loadMembers(); }
+    if (activeTab === 'matches') { loadMatches(); loadMembers(); }
     if (activeTab === 'events') loadEvents();
     if (activeTab === 'rentals') { loadCourts(); loadBookings(); loadMembers(); }
-  }, [activeTab, selectedClub, loadStats, loadMembers, loadPayments, loadEvents, loadCourts, loadBookings]);
+  }, [activeTab, selectedClub, loadStats, loadMembers, loadPayments, loadMatches, loadEvents, loadCourts, loadBookings]);
 
   const handleSignOut = async () => { await signOut(); router.push('/'); };
 
@@ -1006,6 +1273,7 @@ export default function DashboardPage() {
     { id: 'overview', name: 'Resumen', icon: Home },
     { id: 'members', name: 'Socios', icon: Users },
     { id: 'payments', name: 'Pagos', icon: CreditCard },
+    { id: 'matches', name: 'Partidos', icon: Trophy },
     { id: 'events', name: 'Eventos', icon: Calendar },
     { id: 'rentals', name: 'Arriendos', icon: LayoutGrid },
     { id: 'documents', name: 'Documentos', icon: FileText },
@@ -1655,6 +1923,111 @@ export default function DashboardPage() {
                   </div>
                 )}
               </div>
+            </div>
+          )}
+
+          {activeTab === 'matches' && (
+            <div className="space-y-6 animate-fade-in">
+              {matchModal.open && selectedClub && user && (
+                <MatchModal clubId={selectedClub.id} userId={user.uid} members={members} match={matchModal.match}
+                  onClose={() => setMatchModal({ open: false, match: null })} onSaved={loadMatches} />
+              )}
+              {bulkMatchModal && selectedClub && user && (
+                <BulkMatchModal clubId={selectedClub.id} userId={user.uid} members={members}
+                  onClose={() => setBulkMatchModal(false)} onSaved={loadMatches} />
+              )}
+              
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <h3 className="text-lg font-semibold text-gray-900">Gestión de Partidos</h3>
+                <div className="flex gap-2">
+                  <button onClick={() => setBulkMatchModal(true)} className="btn-secondary text-sm !py-2 !px-4 flex items-center gap-2">
+                    <FileText className="w-4 h-4" /> Carga Masiva
+                  </button>
+                  <button onClick={() => setMatchModal({ open: true, match: null })} className="btn-primary text-sm !py-2 !px-4 flex items-center gap-2">
+                    <Plus className="w-4 h-4" /> Crear Partido
+                  </button>
+                </div>
+              </div>
+
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input className="input-field !pl-10" placeholder="Buscar partidos..." value={matchSearch} onChange={e => setMatchSearch(e.target.value)} />
+              </div>
+
+              {matchesLoading ? (
+                <div className="flex items-center justify-center py-12"><div className="w-8 h-8 border-4 border-primary-200 border-t-primary-600 rounded-full animate-spin" /></div>
+              ) : matches.length === 0 ? (
+                <div className="card p-12 text-center">
+                  <Trophy className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+                  <p className="text-lg font-medium text-gray-500">Sin partidos programados</p>
+                  <p className="text-sm text-gray-400 mt-1">Crea un partido para generar cobros automáticos por categoría</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {matches.filter(m => 
+                    m.title.toLowerCase().includes(matchSearch.toLowerCase()) ||
+                    m.opponent?.toLowerCase().includes(matchSearch.toLowerCase()) ||
+                    m.category.toLowerCase().includes(matchSearch.toLowerCase())
+                  ).map(match => {
+                    const matchDate = match.date instanceof Timestamp ? match.date.toDate() : new Date();
+                    const categoryColors = {
+                      infantil: 'bg-blue-100 text-blue-700',
+                      juvenil: 'bg-green-100 text-green-700',
+                      adulto: 'bg-purple-100 text-purple-700',
+                      senior: 'bg-orange-100 text-orange-700',
+                      mixto: 'bg-pink-100 text-pink-700',
+                    };
+                    
+                    return (
+                      <div key={match.id} className="card group hover:shadow-md transition-all">
+                        <div className="p-5">
+                          <div className="flex items-start justify-between mb-3">
+                            <div className="flex-1">
+                              <h4 className="font-semibold text-gray-900 mb-1">{match.title}</h4>
+                              <span className={`text-xs px-2 py-1 rounded-full ${categoryColors[match.category]}`}>
+                                {match.category.charAt(0).toUpperCase() + match.category.slice(1)}
+                              </span>
+                            </div>
+                            <div className="flex gap-1">
+                              <button onClick={() => setMatchModal({ open: true, match })} className="p-1.5 text-gray-400 hover:text-primary-600"><Edit2 className="w-4 h-4" /></button>
+                              <button onClick={async () => {
+                                if (!selectedClub || !confirm('¿Eliminar este partido y sus cobros asociados?')) return;
+                                try {
+                                  await deleteMatch(selectedClub.id, match.id);
+                                  toast.success('Partido eliminado');
+                                  loadMatches();
+                                } catch { toast.error('Error al eliminar'); }
+                              }} className="p-1.5 text-gray-400 hover:text-red-500"><Trash2 className="w-4 h-4" /></button>
+                            </div>
+                          </div>
+                          
+                          {match.opponent && (
+                            <p className="text-sm text-gray-600 mb-2">🏆 vs {match.opponent}</p>
+                          )}
+                          
+                          <div className="space-y-1 text-sm text-gray-500">
+                            <p>📅 {matchDate.toLocaleDateString('es-CL', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>
+                            {match.location && <p>📍 {match.location}</p>}
+                            <p>💰 {formatCLP(match.cost)} por jugador</p>
+                            <p>👥 {match.participants.length} participantes</p>
+                          </div>
+                          
+                          <div className="mt-3 pt-3 border-t border-gray-100">
+                            <span className={`text-xs px-2 py-1 rounded-full ${
+                              match.status === 'scheduled' ? 'bg-blue-50 text-blue-600' :
+                              match.status === 'completed' ? 'bg-green-50 text-green-600' :
+                              'bg-gray-50 text-gray-600'
+                            }`}>
+                              {match.status === 'scheduled' ? 'Programado' :
+                               match.status === 'completed' ? 'Completado' : 'Cancelado'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
 
