@@ -221,9 +221,21 @@ function PaymentModal({ clubId, members, payment, onClose, onSaved }: PaymentMod
       ? payment.dueDate.toDate().toISOString().split('T')[0]
       : new Date().toISOString().split('T')[0],
     isRecurring: payment?.isRecurring ?? false,
+    paymentType: payment?.isRecurring ? 'monthly' : 'exceptional',
     bulkAll: false,
   });
   const [saving, setSaving] = useState(false);
+
+  const paymentTypePresets = {
+    monthly: {
+      concept: 'Cuota mensual',
+      description: 'Pago mensual de membresía',
+    },
+    exceptional: {
+      concept: '',
+      description: '',
+    },
+  };
 
   const handleMemberChange = (memberId: string) => {
     const m = members.find(x => x.id === memberId);
@@ -300,6 +312,50 @@ function PaymentModal({ clubId, members, payment, onClose, onSaved }: PaymentMod
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {!payment && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Tipo de Cobro</label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setForm(f => ({ 
+                    ...f, 
+                    paymentType: 'monthly', 
+                    isRecurring: true,
+                    concept: paymentTypePresets.monthly.concept,
+                    description: paymentTypePresets.monthly.description,
+                  }))}
+                  className={`p-3 rounded-xl border-2 transition-all ${
+                    form.paymentType === 'monthly'
+                      ? 'border-primary-500 bg-primary-50 text-primary-700'
+                      : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                  }`}
+                >
+                  <div className="text-sm font-semibold">📅 Mensual</div>
+                  <div className="text-xs mt-1">Cuota recurrente</div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setForm(f => ({ 
+                    ...f, 
+                    paymentType: 'exceptional', 
+                    isRecurring: false,
+                    concept: '',
+                    description: '',
+                  }))}
+                  className={`p-3 rounded-xl border-2 transition-all ${
+                    form.paymentType === 'exceptional'
+                      ? 'border-accent-500 bg-accent-50 text-accent-700'
+                      : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                  }`}
+                >
+                  <div className="text-sm font-semibold">⚡ Excepcional</div>
+                  <div className="text-xs mt-1">Partido, evento, etc.</div>
+                </button>
+              </div>
+            </div>
+          )}
+          
+          {!payment && (
             <label className="flex items-center gap-2 cursor-pointer p-3 bg-primary-50 rounded-xl">
               <input type="checkbox" checked={form.bulkAll} onChange={e => setForm(f => ({ ...f, bulkAll: e.target.checked, memberId: '', memberName: '' }))} className="w-4 h-4 rounded border-gray-300 text-primary-600" />
               <span className="text-sm font-medium text-primary-700">Cobro masivo (todos los socios activos)</span>
@@ -317,8 +373,11 @@ function PaymentModal({ clubId, members, payment, onClose, onSaved }: PaymentMod
             </div>
           )}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Concepto *</label>
-            <input className="input-field" value={form.concept} onChange={e => setForm({ ...form, concept: e.target.value })} placeholder="Ej: Cuota mensual Enero" required />
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Concepto * 
+              {form.paymentType === 'exceptional' && <span className="text-xs text-gray-500 ml-2">(Ej: Partido amistoso, Torneo, etc.)</span>}
+            </label>
+            <input className="input-field" value={form.concept} onChange={e => setForm({ ...form, concept: e.target.value })} placeholder={form.paymentType === 'monthly' ? 'Cuota mensual Enero' : 'Ej: Partido amistoso'} required />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
@@ -358,10 +417,6 @@ function PaymentModal({ clubId, members, payment, onClose, onSaved }: PaymentMod
               </div>
             )}
           </div>
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" checked={form.isRecurring} onChange={e => setForm({ ...form, isRecurring: e.target.checked })} className="w-4 h-4 rounded border-gray-300 text-primary-600" />
-            <span className="text-sm text-gray-700">Cobro recurrente mensual</span>
-          </label>
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={onClose} className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50">Cancelar</button>
             <button type="submit" disabled={saving} className="flex-1 btn-primary disabled:opacity-50">{saving ? 'Guardando...' : payment ? 'Actualizar' : form.bulkAll ? 'Crear cobros masivos' : 'Crear cobro'}</button>
