@@ -74,7 +74,7 @@ export interface Member {
   rut?: string;
   role: UserRole;
   category?: string;
-  divisionId?: string;
+  divisionIds?: string[];
   photoURL?: string;
   parentName?: string;
   parentEmail?: string;

@@ -114,7 +114,7 @@ function MemberModal({ clubId, member, divisions, onClose, onSaved }: MemberModa
     rut: member?.rut ?? '',
     role: (member?.role ?? 'member') as UserRole,
     category: member?.category ?? '',
-    divisionId: member?.divisionId ?? '',
+    divisionIds: member?.divisionIds ?? [],
     notes: member?.notes ?? '',
     isActive: member?.isActive ?? true,
   });
@@ -196,15 +196,34 @@ function MemberModal({ clubId, member, divisions, onClose, onSaved }: MemberModa
               )}
             </div>
           </div>
-          {form.category !== '' && (
+          {form.category !== '' && divisions.length > 0 && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">División</label>
-              <select className="input-field" value={form.divisionId} onChange={e => setForm({ ...form, divisionId: e.target.value })}>
-                <option value="">Sin división</option>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Divisiones (puede jugar en varias)</label>
+              <div className="space-y-2 max-h-40 overflow-y-auto border border-gray-200 rounded-lg p-3">
                 {divisions.map(div => (
-                  <option key={div.id} value={div.id}>{div.name}</option>
+                  <label key={div.id} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-2 rounded">
+                    <input
+                      type="checkbox"
+                      checked={form.divisionIds.includes(div.id)}
+                      onChange={e => {
+                        if (e.target.checked) {
+                          setForm({ ...form, divisionIds: [...form.divisionIds, div.id] });
+                        } else {
+                          setForm({ ...form, divisionIds: form.divisionIds.filter(id => id !== div.id) });
+                        }
+                      }}
+                      className="w-4 h-4 rounded border-gray-300 text-primary-600"
+                    />
+                    <span className="text-sm text-gray-700 flex items-center gap-2">
+                      <div
+                        className="w-3 h-3 rounded-full"
+                        style={{ backgroundColor: div.color }}
+                      />
+                      {div.name}
+                    </span>
+                  </label>
                 ))}
-              </select>
+              </div>
             </div>
           )}
           <div>
@@ -848,7 +867,7 @@ function MatchModal({ clubId, userId, members, divisions, match, onClose, onSave
     m.isActive && 
     m.category && 
     (form.category === 'mixto' || m.category === form.category) &&
-    (!form.divisionId || m.divisionId === form.divisionId)
+    (!form.divisionId || (m.divisionIds && m.divisionIds.includes(form.divisionId)))
   );
 
   const otherMembers = members.filter(m =>
@@ -856,7 +875,7 @@ function MatchModal({ clubId, userId, members, divisions, match, onClose, onSave
     m.category &&
     (form.category === 'mixto' || m.category === form.category) &&
     form.divisionId &&
-    m.divisionId !== form.divisionId
+    (!m.divisionIds || !m.divisionIds.includes(form.divisionId))
   );
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -883,7 +902,7 @@ function MatchModal({ clubId, userId, members, divisions, match, onClose, onSave
         const selectedMembers = members.filter(m => 
           (m.isActive && m.category && 
            (form.category === 'mixto' || m.category === form.category) &&
-           (!form.divisionId || m.divisionId === form.divisionId)) ||
+           (!form.divisionId || (m.divisionIds && m.divisionIds.includes(form.divisionId)))) ||
           additionalMembers.includes(m.id)
         );
         
@@ -1011,9 +1030,9 @@ function MatchModal({ clubId, userId, members, divisions, match, onClose, onSave
                         />
                         <span className="text-sm text-gray-700">
                           {m.firstName} {m.lastName}
-                          {m.divisionId && divisions.find(d => d.id === m.divisionId) && (
+                          {m.divisionIds && m.divisionIds.length > 0 && (
                             <span className="ml-2 text-xs text-gray-500">
-                              ({divisions.find(d => d.id === m.divisionId)?.name})
+                              ({m.divisionIds.map(divId => divisions.find(d => d.id === divId)?.name).filter(Boolean).join(', ')})
                             </span>
                           )}
                         </span>
@@ -1680,24 +1699,29 @@ export default function DashboardPage() {
                                 </div>
                                 <div className="flex flex-col gap-1">
                                   <span className="font-medium text-gray-900">{m.firstName} {m.lastName}</span>
-                                  <div className="flex items-center gap-1.5">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
                                     {m.category && (
                                       <span className="text-xs px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 font-medium">
                                         <Trophy className="w-3 h-3 inline mr-0.5" />
                                         {m.category.charAt(0).toUpperCase() + m.category.slice(1)}
                                       </span>
                                     )}
-                                    {m.divisionId && divisions.find(d => d.id === m.divisionId) && (
-                                      <span 
-                                        className="text-xs px-1.5 py-0.5 rounded-full font-medium"
-                                        style={{ 
-                                          backgroundColor: divisions.find(d => d.id === m.divisionId)?.color + '20',
-                                          color: divisions.find(d => d.id === m.divisionId)?.color 
-                                        }}
-                                      >
-                                        {divisions.find(d => d.id === m.divisionId)?.name}
-                                      </span>
-                                    )}
+                                    {m.divisionIds && m.divisionIds.length > 0 && m.divisionIds.map(divId => {
+                                      const division = divisions.find(d => d.id === divId);
+                                      if (!division) return null;
+                                      return (
+                                        <span 
+                                          key={divId}
+                                          className="text-xs px-1.5 py-0.5 rounded-full font-medium"
+                                          style={{ 
+                                            backgroundColor: division.color + '20',
+                                            color: division.color 
+                                          }}
+                                        >
+                                          {division.name}
+                                        </span>
+                                      );
+                                    })}
                                   </div>
                                 </div>
                               </div>
