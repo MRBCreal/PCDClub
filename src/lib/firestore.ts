@@ -21,7 +21,7 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { Club, Member, Payment, Invoice, Event, Attendance, ClubDocument, ClubSettings, DashboardStats, Notification, Court, Booking, Match, PlayerCategory } from '@/types';
+import { Club, Member, Payment, Invoice, Event, Attendance, ClubDocument, ClubSettings, DashboardStats, Notification, Court, Booking, Match, PlayerCategory, Division } from '@/types';
 
 // ==================== CLUBS ====================
 
@@ -618,4 +618,64 @@ export async function deleteMatch(clubId: string, matchId: string): Promise<void
     batch.delete(doc(db, 'clubs', clubId, 'matches', matchId));
     await batch.commit();
   }
+}
+
+// ==================== DIVISIONS ====================
+
+export async function getDivisions(clubId: string): Promise<Division[]> {
+  const q = query(
+    collection(db, 'clubs', clubId, 'divisions'),
+    orderBy('order', 'asc')
+  );
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Division));
+}
+
+export async function createDivision(clubId: string, data: Omit<Division, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
+  const divisionRef = doc(collection(db, 'clubs', clubId, 'divisions'));
+  await setDoc(divisionRef, {
+    ...data,
+    id: divisionRef.id,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+  return divisionRef.id;
+}
+
+export async function updateDivision(clubId: string, divisionId: string, data: Partial<Division>): Promise<void> {
+  await updateDoc(doc(db, 'clubs', clubId, 'divisions', divisionId), {
+    ...data,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function deleteDivision(clubId: string, divisionId: string): Promise<void> {
+  await deleteDoc(doc(db, 'clubs', clubId, 'divisions', divisionId));
+}
+
+export async function createDefaultDivisions(clubId: string): Promise<void> {
+  const defaultDivisions = [
+    { name: 'Maxi Blanco', color: '#FFFFFF', order: 1 },
+    { name: 'Maxi Azul', color: '#3B82F6', order: 2 },
+    { name: 'Segunda', color: '#10B981', order: 3 },
+    { name: 'Primera', color: '#F59E0B', order: 4 },
+  ];
+
+  const batch = writeBatch(db);
+  
+  for (const div of defaultDivisions) {
+    const divRef = doc(collection(db, 'clubs', clubId, 'divisions'));
+    batch.set(divRef, {
+      id: divRef.id,
+      clubId,
+      name: div.name,
+      color: div.color,
+      order: div.order,
+      isActive: true,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  }
+  
+  await batch.commit();
 }

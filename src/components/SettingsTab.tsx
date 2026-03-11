@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { Club, ClubSettings, PaymentMethod } from '@/types';
-import { Settings, Save, RefreshCw } from 'lucide-react';
+import { Settings, Save, RefreshCw, Trophy, Building } from 'lucide-react';
 import { updateClub } from '@/lib/firestore';
 import toast from 'react-hot-toast';
+import DivisionsManager from './DivisionsManager';
 
 interface SettingsTabProps {
   club: Club;
@@ -10,6 +11,7 @@ interface SettingsTabProps {
 }
 
 export default function SettingsTab({ club, onUpdate }: SettingsTabProps) {
+  const [activeSubTab, setActiveSubTab] = useState<'general' | 'divisions'>('general');
   const [form, setForm] = useState<Partial<Club>>({
     name: club.name,
     description: club.description,
@@ -72,7 +74,38 @@ export default function SettingsTab({ club, onUpdate }: SettingsTabProps) {
         </h3>
       </div>
 
-      <form onSubmit={handleSave} className="space-y-8">
+      {/* Sub-tabs */}
+      <div className="flex gap-2 border-b border-gray-200 mb-6">
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('general')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            activeSubTab === 'general'
+              ? 'border-primary-600 text-primary-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <Building className="w-4 h-4 inline mr-2" />
+          General
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('divisions')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            activeSubTab === 'divisions'
+              ? 'border-primary-600 text-primary-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <Trophy className="w-4 h-4 inline mr-2" />
+          Divisiones
+        </button>
+      </div>
+
+      {activeSubTab === 'divisions' ? (
+        <DivisionsManager clubId={club.id} />
+      ) : (
+        <form onSubmit={handleSave} className="space-y-8">
         {/* Basic Info */}
         <div className="card p-6">
           <h4 className="text-lg font-semibold text-gray-900 mb-4 border-b border-gray-100 pb-2">
@@ -245,6 +278,7 @@ export default function SettingsTab({ club, onUpdate }: SettingsTabProps) {
           </button>
         </div>
       </form>
+      )}
     </div>
   );
 }

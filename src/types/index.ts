@@ -74,6 +74,7 @@ export interface Member {
   rut?: string;
   role: UserRole;
   category?: string;
+  divisionId?: string;
   photoURL?: string;
   parentName?: string;
   parentEmail?: string;
@@ -132,6 +133,7 @@ export interface InvoiceItem {
 export interface Event {
   id: string;
   clubId: string;
+  divisionId?: string;
   title: string;
   description: string;
   location?: string;
@@ -232,10 +234,23 @@ export interface Booking {
 
 export type PlayerCategory = 'infantil' | 'juvenil' | 'adulto' | 'senior' | 'mixto';
 
+export interface Division {
+  id: string;
+  clubId: string;
+  name: string;
+  description?: string;
+  color?: string;
+  order: number;
+  isActive: boolean;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
 export interface Match {
   id: string;
   clubId: string;
   eventId?: string;
+  divisionId?: string;
   title: string;
   description?: string;
   category: PlayerCategory;

@@ -35,8 +35,9 @@ import {
   createBulkMatches,
   updateMatch,
   deleteMatch,
+  getDivisions,
 } from '@/lib/firestore';
-import { Club, Member, Payment, DashboardStats, PaymentStatus, PaymentMethod, UserRole, Event, Court, Booking, Match, PlayerCategory } from '@/types';
+import { Club, Member, Payment, DashboardStats, PaymentStatus, PaymentMethod, UserRole, Event, Court, Booking, Match, PlayerCategory, Division } from '@/types';
 import { Timestamp } from 'firebase/firestore';
 import {
   Zap, Plus, Users, CreditCard, BarChart3, Settings,
@@ -99,11 +100,12 @@ function tsToRelative(ts: unknown): string {
 interface MemberModalProps {
   clubId: string;
   member: Member | null;
+  divisions: Division[];
   onClose: () => void;
   onSaved: () => void;
 }
 
-function MemberModal({ clubId, member, onClose, onSaved }: MemberModalProps) {
+function MemberModal({ clubId, member, divisions, onClose, onSaved }: MemberModalProps) {
   const [form, setForm] = useState({
     firstName: member?.firstName ?? '',
     lastName: member?.lastName ?? '',
@@ -112,6 +114,7 @@ function MemberModal({ clubId, member, onClose, onSaved }: MemberModalProps) {
     rut: member?.rut ?? '',
     role: (member?.role ?? 'member') as UserRole,
     category: member?.category ?? '',
+    divisionId: member?.divisionId ?? '',
     notes: member?.notes ?? '',
     isActive: member?.isActive ?? true,
   });
@@ -180,16 +183,31 @@ function MemberModal({ clubId, member, onClose, onSaved }: MemberModalProps) {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Categoría de Jugador</label>
-              <select className="input-field" value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}>
-                <option value="">Sin categoría</option>
-                <option value="infantil">Infantil</option>
-                <option value="juvenil">Juvenil</option>
-                <option value="adulto">Adulto</option>
-                <option value="senior">Senior</option>
-              </select>
+              <label className="flex items-center gap-2 cursor-pointer mb-2">
+                <input type="checkbox" checked={form.category !== ''} onChange={e => setForm({ ...form, category: e.target.checked ? 'adulto' : '' })} className="w-4 h-4 rounded border-gray-300 text-primary-600" />
+                <span className="text-sm font-medium text-gray-700">Es jugador</span>
+              </label>
+              {form.category !== '' && (
+                <select className="input-field" value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}>
+                  <option value="infantil">Infantil</option>
+                  <option value="juvenil">Juvenil</option>
+                  <option value="adulto">Adulto</option>
+                  <option value="senior">Senior</option>
+                </select>
+              )}
             </div>
           </div>
+          {form.category !== '' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">División</label>
+              <select className="input-field" value={form.divisionId} onChange={e => setForm({ ...form, divisionId: e.target.value })}>
+                <option value="">Sin división</option>
+                {divisions.map(div => (
+                  <option key={div.id} value={div.id}>{div.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Notas</label>
             <textarea className="input-field" rows={2} value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
@@ -1078,6 +1096,9 @@ export default function DashboardPage() {
   const [bulkMatchModal, setBulkMatchModal] = useState(false);
   const [matchSearch, setMatchSearch] = useState('');
 
+  // Divisions state
+  const [divisions, setDivisions] = useState<Division[]>([]);
+
   useEffect(() => {
     if (!loading && !user) router.push('/login');
   }, [user, loading, router]);
@@ -1182,15 +1203,24 @@ export default function DashboardPage() {
     finally { setMatchesLoading(false); }
   }, [selectedClub]);
 
+  const loadDivisions = useCallback(async () => {
+    if (!selectedClub) return;
+    try {
+      const divs = await getDivisions(selectedClub.id);
+      setDivisions(divs);
+    } catch { toast.error('Error al cargar divisiones'); }
+  }, [selectedClub]);
+
   useEffect(() => {
     if (!selectedClub) return;
+    loadDivisions();
     if (activeTab === 'overview') loadStats();
     if (activeTab === 'members') loadMembers();
     if (activeTab === 'payments') { loadPayments(); loadMembers(); }
     if (activeTab === 'matches') { loadMatches(); loadMembers(); }
     if (activeTab === 'events') loadEvents();
     if (activeTab === 'rentals') { loadCourts(); loadBookings(); loadMembers(); }
-  }, [activeTab, selectedClub, loadStats, loadMembers, loadPayments, loadMatches, loadEvents, loadCourts, loadBookings]);
+  }, [activeTab, selectedClub, loadStats, loadMembers, loadPayments, loadMatches, loadEvents, loadCourts, loadBookings, loadDivisions]);
 
   const handleSignOut = async () => { await signOut(); router.push('/'); };
 
@@ -1522,7 +1552,7 @@ export default function DashboardPage() {
           {activeTab === 'members' && (
             <div className="space-y-4 animate-fade-in">
               {memberModal.open && selectedClub && (
-                <MemberModal clubId={selectedClub.id} member={memberModal.member}
+                <MemberModal clubId={selectedClub.id} member={memberModal.member} divisions={divisions}
                   onClose={() => setMemberModal({ open: false, member: null })} onSaved={loadMembers} />
               )}
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
@@ -1565,7 +1595,28 @@ export default function DashboardPage() {
                                 <div className="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center flex-shrink-0">
                                   <span className="text-xs font-bold text-primary-600">{m.firstName[0]}{m.lastName[0]}</span>
                                 </div>
-                                <span className="font-medium text-gray-900">{m.firstName} {m.lastName}</span>
+                                <div className="flex flex-col gap-1">
+                                  <span className="font-medium text-gray-900">{m.firstName} {m.lastName}</span>
+                                  <div className="flex items-center gap-1.5">
+                                    {m.category && (
+                                      <span className="text-xs px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 font-medium">
+                                        <Trophy className="w-3 h-3 inline mr-0.5" />
+                                        {m.category.charAt(0).toUpperCase() + m.category.slice(1)}
+                                      </span>
+                                    )}
+                                    {m.divisionId && divisions.find(d => d.id === m.divisionId) && (
+                                      <span 
+                                        className="text-xs px-1.5 py-0.5 rounded-full font-medium"
+                                        style={{ 
+                                          backgroundColor: divisions.find(d => d.id === m.divisionId)?.color + '20',
+                                          color: divisions.find(d => d.id === m.divisionId)?.color 
+                                        }}
+                                      >
+                                        {divisions.find(d => d.id === m.divisionId)?.name}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
                               </div>
                             </td>
                             <td className="px-4 py-3 text-gray-500 hidden sm:table-cell">{m.email}</td>
