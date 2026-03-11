@@ -460,17 +460,19 @@ function PaymentModal({ clubId, members, payment, onClose, onSaved }: PaymentMod
 
 interface EventModalProps {
   clubId: string;
+  divisions: Division[];
   event: Event | null;
   onClose: () => void;
   onSaved: () => void;
 }
 
-function EventModal({ clubId, event, onClose, onSaved }: EventModalProps) {
+function EventModal({ clubId, divisions, event, onClose, onSaved }: EventModalProps) {
   const { user } = useAuth();
   const [form, setForm] = useState({
     title: event?.title ?? '',
     description: event?.description ?? '',
     location: event?.location ?? '',
+    divisionId: event?.divisionId ?? '',
     startDate: event?.startDate instanceof Timestamp
       ? event.startDate.toDate().toISOString().slice(0, 16)
       : new Date().toISOString().slice(0, 16),
@@ -492,6 +494,7 @@ function EventModal({ clubId, event, onClose, onSaved }: EventModalProps) {
       if (event) {
         await updateEvent(clubId, event.id, {
           ...form,
+          divisionId: form.divisionId || undefined,
           startDate,
           endDate,
         });
@@ -500,6 +503,7 @@ function EventModal({ clubId, event, onClose, onSaved }: EventModalProps) {
         await createEvent(clubId, {
           ...form,
           clubId,
+          divisionId: form.divisionId || undefined,
           startDate,
           endDate,
           attendees: [],
@@ -539,6 +543,15 @@ function EventModal({ clubId, event, onClose, onSaved }: EventModalProps) {
               <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input className="input-field !pl-10" value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} placeholder="Ej: Gimnasio Municipal" />
             </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">División (opcional)</label>
+            <select className="input-field" value={form.divisionId} onChange={e => setForm({ ...form, divisionId: e.target.value })}>
+              <option value="">Todas las divisiones</option>
+              {divisions.map(div => (
+                <option key={div.id} value={div.id}>{div.name}</option>
+              ))}
+            </select>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -809,16 +822,18 @@ interface MatchModalProps {
   clubId: string;
   userId: string;
   members: Member[];
+  divisions: Division[];
   match: Match | null;
   onClose: () => void;
   onSaved: () => void;
 }
 
-function MatchModal({ clubId, userId, members, match, onClose, onSaved }: MatchModalProps) {
+function MatchModal({ clubId, userId, members, divisions, match, onClose, onSaved }: MatchModalProps) {
   const [form, setForm] = useState({
     title: match?.title ?? '',
     description: match?.description ?? '',
     category: (match?.category ?? 'adulto') as PlayerCategory,
+    divisionId: match?.divisionId ?? '',
     opponent: match?.opponent ?? '',
     location: match?.location ?? '',
     date: match?.date instanceof Timestamp
@@ -828,11 +843,21 @@ function MatchModal({ clubId, userId, members, match, onClose, onSaved }: MatchM
     status: (match?.status ?? 'scheduled') as 'scheduled' | 'completed' | 'cancelled',
   });
   const [saving, setSaving] = useState(false);
+  const [additionalMembers, setAdditionalMembers] = useState<string[]>([]);
 
   const eligibleMembers = members.filter(m => 
     m.isActive && 
     m.category && 
-    (form.category === 'mixto' || m.category === form.category)
+    (form.category === 'mixto' || m.category === form.category) &&
+    (!form.divisionId || m.divisionId === form.divisionId)
+  );
+
+  const otherMembers = members.filter(m =>
+    m.isActive &&
+    m.category &&
+    (form.category === 'mixto' || m.category === form.category) &&
+    form.divisionId &&
+    m.divisionId !== form.divisionId
   );
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -846,6 +871,7 @@ function MatchModal({ clubId, userId, members, match, onClose, onSaved }: MatchM
           title: form.title,
           description: form.description,
           category: form.category,
+          divisionId: form.divisionId || undefined,
           opponent: form.opponent,
           location: form.location,
           date: matchDate,
@@ -854,18 +880,27 @@ function MatchModal({ clubId, userId, members, match, onClose, onSaved }: MatchM
         });
         toast.success('Partido actualizado');
       } else {
+        // Filter members: division members + additional selected members
+        const selectedMembers = members.filter(m => 
+          (m.isActive && m.category && 
+           (form.category === 'mixto' || m.category === form.category) &&
+           (!form.divisionId || m.divisionId === form.divisionId)) ||
+          additionalMembers.includes(m.id)
+        );
+        
         await createMatchWithPayments(clubId, userId, {
           clubId,
           title: form.title,
           description: form.description,
           category: form.category,
+          divisionId: form.divisionId || undefined,
           opponent: form.opponent,
           location: form.location,
           date: matchDate,
           cost: Number(form.cost),
           status: 'scheduled',
-        }, members);
-        toast.success(`Partido creado con ${eligibleMembers.length} cobros generados`);
+        }, selectedMembers);
+        toast.success(`Partido creado con ${selectedMembers.length} cobros generados`);
       }
       onSaved();
       onClose();
@@ -904,9 +939,18 @@ function MatchModal({ clubId, userId, members, match, onClose, onSaved }: MatchM
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Costo por jugador (CLP) *</label>
-              <input type="number" min="0" className="input-field" value={form.cost} onChange={e => setForm({ ...form, cost: e.target.value })} required />
+              <label className="block text-sm font-medium text-gray-700 mb-1">División</label>
+              <select className="input-field" value={form.divisionId} onChange={e => setForm({ ...form, divisionId: e.target.value })}>
+                <option value="">Todas las divisiones</option>
+                {divisions.map(div => (
+                  <option key={div.id} value={div.id}>{div.name}</option>
+                ))}
+              </select>
             </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Costo por jugador (CLP) *</label>
+            <input type="number" min="0" className="input-field" value={form.cost} onChange={e => setForm({ ...form, cost: e.target.value })} required />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -935,11 +979,52 @@ function MatchModal({ clubId, userId, members, match, onClose, onSaved }: MatchM
             )}
           </div>
           {!match && (
-            <div className="p-3 bg-blue-50 rounded-lg">
-              <p className="text-sm text-blue-700">
-                <strong>{eligibleMembers.length}</strong> jugadores de categoría <strong>{form.category}</strong> recibirán un cobro de <strong>${Number(form.cost).toLocaleString('es-CL')}</strong>
-              </p>
-            </div>
+            <>
+              <div className="p-3 bg-blue-50 rounded-lg">
+                <p className="text-sm text-blue-700">
+                  <strong>{eligibleMembers.length + additionalMembers.length}</strong> jugadores recibirán un cobro de <strong>${Number(form.cost).toLocaleString('es-CL')}</strong>
+                  {form.divisionId && divisions.find(d => d.id === form.divisionId) && (
+                    <span className="block mt-1">
+                      División: <strong>{divisions.find(d => d.id === form.divisionId)?.name}</strong> ({eligibleMembers.length} jugadores)
+                    </span>
+                  )}
+                </p>
+              </div>
+              
+              {form.divisionId && otherMembers.length > 0 && (
+                <div className="border border-gray-200 rounded-lg p-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Agregar jugadores de otras divisiones (opcional)
+                  </label>
+                  <div className="max-h-40 overflow-y-auto space-y-1">
+                    {otherMembers.map(m => (
+                      <label key={m.id} className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={additionalMembers.includes(m.id)}
+                          onChange={e => {
+                            if (e.target.checked) {
+                              setAdditionalMembers([...additionalMembers, m.id]);
+                            } else {
+                              setAdditionalMembers(additionalMembers.filter(id => id !== m.id));
+                            }
+                          }}
+                          className="w-4 h-4 rounded border-gray-300 text-primary-600"
+                        />
+                        <span className="text-sm text-gray-700">
+                          {m.firstName} {m.lastName}
+                          {m.divisionId && divisions.find(d => d.id === m.divisionId) && (
+                            <span className="ml-2 text-xs text-gray-500">
+                              ({divisions.find(d => d.id === m.divisionId)?.name})
+                            </span>
+                          )}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
           )}
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={onClose} className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50">Cancelar</button>
@@ -1798,7 +1883,7 @@ export default function DashboardPage() {
           {activeTab === 'events' && (
             <div className="space-y-4 animate-fade-in">
               {eventModal.open && selectedClub && (
-                <EventModal clubId={selectedClub.id} event={eventModal.event}
+                <EventModal clubId={selectedClub.id} divisions={divisions} event={eventModal.event}
                   onClose={() => setEventModal({ open: false, event: null })} onSaved={loadEvents} />
               )}
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
@@ -1980,7 +2065,7 @@ export default function DashboardPage() {
           {activeTab === 'matches' && (
             <div className="space-y-6 animate-fade-in">
               {matchModal.open && selectedClub && user && (
-                <MatchModal clubId={selectedClub.id} userId={user.uid} members={members} match={matchModal.match}
+                <MatchModal clubId={selectedClub.id} userId={user.uid} members={members} divisions={divisions} match={matchModal.match}
                   onClose={() => setMatchModal({ open: false, match: null })} onSaved={loadMatches} />
               )}
               {bulkMatchModal && selectedClub && user && (
