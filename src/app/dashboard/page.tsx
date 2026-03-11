@@ -2164,11 +2164,11 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {activeTab === 'settings' && isSuperAdmin && (
+          {activeTab === 'settings' && isSuperAdmin && !selectedClub && (
             <SuperAdminSettings />
           )}
 
-          {activeTab === 'settings' && !isSuperAdmin && selectedClub && (
+          {activeTab === 'settings' && selectedClub && (
             <SettingsTab club={selectedClub} onUpdate={() => {}} />
           )}
 
