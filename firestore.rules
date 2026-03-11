@@ -153,6 +153,18 @@ service cloud.firestore {
         allow update: if isClubManager(clubId) || (isClubMember(clubId) && resource.data.memberId == request.auth.uid);
         allow delete: if isClubManager(clubId);
       }
+
+      // Club matches subcollection
+      match /matches/{matchId} {
+        allow read: if isClubManager(clubId) || isClubMember(clubId);
+        allow create, update, delete: if isClubManager(clubId);
+      }
+
+      // Club divisions subcollection
+      match /divisions/{divisionId} {
+        allow read: if isClubManager(clubId) || isClubMember(clubId);
+        allow create, update, delete: if isClubManager(clubId);
+      }
     }
 
     // Payment transactions (global for webhook processing)

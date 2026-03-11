@@ -2164,12 +2164,17 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {activeTab === 'settings' && isSuperAdmin && !selectedClub && (
-            <SuperAdminSettings />
-          )}
-
-          {activeTab === 'settings' && selectedClub && (
-            <SettingsTab club={selectedClub} onUpdate={() => {}} />
+          {activeTab === 'settings' && (
+            <>
+              {isSuperAdmin && (
+                <div className="mb-6">
+                  <SuperAdminSettings />
+                </div>
+              )}
+              {selectedClub && (
+                <SettingsTab club={selectedClub} onUpdate={() => {}} />
+              )}
+            </>
           )}
 
           {['documents', 'reports'].includes(activeTab) && (
