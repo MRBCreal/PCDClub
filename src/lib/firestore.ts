@@ -623,12 +623,17 @@ export async function deleteMatch(clubId: string, matchId: string): Promise<void
 // ==================== DIVISIONS ====================
 
 export async function getDivisions(clubId: string): Promise<Division[]> {
-  const q = query(
-    collection(db, 'clubs', clubId, 'divisions'),
-    orderBy('order', 'asc')
-  );
-  const snapshot = await getDocs(q);
-  return snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Division));
+  try {
+    const q = query(
+      collection(db, 'clubs', clubId, 'divisions'),
+      orderBy('order', 'asc')
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(d => ({ ...d.data(), id: d.id } as Division));
+  } catch (error) {
+    console.error('Error loading divisions:', error);
+    return [];
+  }
 }
 
 export async function createDivision(clubId: string, data: Omit<Division, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {

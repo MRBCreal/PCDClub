@@ -192,7 +192,6 @@ function MemberModal({ clubId, member, divisions, onClose, onSaved }: MemberModa
                   <option value="infantil">Infantil</option>
                   <option value="juvenil">Juvenil</option>
                   <option value="adulto">Adulto</option>
-                  <option value="senior">Senior</option>
                 </select>
               )}
             </div>
@@ -934,7 +933,6 @@ function MatchModal({ clubId, userId, members, divisions, match, onClose, onSave
                 <option value="infantil">Infantil</option>
                 <option value="juvenil">Juvenil</option>
                 <option value="adulto">Adulto</option>
-                <option value="senior">Senior</option>
                 <option value="mixto">Mixto (todas)</option>
               </select>
             </div>
@@ -2106,11 +2104,10 @@ export default function DashboardPage() {
                     m.category.toLowerCase().includes(matchSearch.toLowerCase())
                   ).map(match => {
                     const matchDate = match.date instanceof Timestamp ? match.date.toDate() : new Date();
-                    const categoryColors = {
+                    const categoryColors: Record<PlayerCategory, string> = {
                       infantil: 'bg-blue-100 text-blue-700',
                       juvenil: 'bg-green-100 text-green-700',
                       adulto: 'bg-purple-100 text-purple-700',
-                      senior: 'bg-orange-100 text-orange-700',
                       mixto: 'bg-pink-100 text-pink-700',
                     };
                     

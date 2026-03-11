@@ -232,7 +232,7 @@ export interface Booking {
   createdAt: Timestamp;
 }
 
-export type PlayerCategory = 'infantil' | 'juvenil' | 'adulto' | 'senior' | 'mixto';
+export type PlayerCategory = 'infantil' | 'juvenil' | 'adulto' | 'mixto';
 
 export interface Division {
   id: string;
